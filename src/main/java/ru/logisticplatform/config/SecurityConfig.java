@@ -1,6 +1,7 @@
 package ru.logisticplatform.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,11 +30,9 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
     private static final String ADMIN_ENDPOINT = "/api/v1/admins/**";
     private static final String LOGIN_ENDPOINT = "/api/v1/sign/**";
+    private static final String USER_ENDPOINT = "/api/v1/users/**";
     private static final String CUSTOMER_ENDPOINT = "/api/v1/customers/**";
     private static final String CONTRACTOR_ENDPOINT = "/api/v1/contractors/**";
-    private static final String TRANSPORT_TYPE_ENDPOINT = "/api/v1/transporttypes/**";
-    private static final String TRANSPORTATION_ENDPOINT = "/api/v1/transportations/**";
-
 
     @Autowired
     public SecurityConfig(JwtTokenProvider jwtTokenProvider) {
@@ -51,15 +50,15 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
         http
                 .httpBasic().disable()
                 .csrf().disable()
+                .formLogin().disable()//new
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 .and()
                 .authorizeRequests()
                 .antMatchers(LOGIN_ENDPOINT).permitAll()
                 .antMatchers(ADMIN_ENDPOINT).hasRole("ADMIN")
-                .antMatchers(CUSTOMER_ENDPOINT).hasRole("CUSTOMER")
-                .antMatchers(CONTRACTOR_ENDPOINT).hasRole("CONTRACTOR")
-                .antMatchers(TRANSPORT_TYPE_ENDPOINT).hasAnyRole("CONTRACTOR", "CUSTOMER")
-                .antMatchers(TRANSPORTATION_ENDPOINT).hasRole("CONTRACTOR")
+                .antMatchers(USER_ENDPOINT).hasAnyRole("ADMIN", "CONTRACTOR", "CUSTOMER")
+                .antMatchers(CUSTOMER_ENDPOINT).hasAnyRole("ADMIN", "CUSTOMER")
+                .antMatchers(CONTRACTOR_ENDPOINT).hasAnyRole("ADMIN", "CONTRACTOR")
                 .anyRequest().authenticated()
                 .and()
                 .apply(new JwtConfigurer(jwtTokenProvider));

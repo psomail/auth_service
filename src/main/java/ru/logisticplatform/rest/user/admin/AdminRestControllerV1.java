@@ -6,15 +6,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
-import ru.logisticplatform.dto.goods.admin.GoodsAdminDto;
+import ru.logisticplatform.dto.RestMessageDto;
 import ru.logisticplatform.dto.user.admin.AdminUserDto;
 import ru.logisticplatform.dto.utils.ObjectMapperUtils;
 import ru.logisticplatform.dto.user.UserDto;
-import ru.logisticplatform.model.goods.Goods;
+import ru.logisticplatform.model.RestMessage;
 import ru.logisticplatform.model.user.UserStatus;
 import ru.logisticplatform.model.user.User;
-import ru.logisticplatform.service.goods.GoodsService;
+import ru.logisticplatform.service.RestMessageService;
 import ru.logisticplatform.service.user.UserService;
 
 import java.util.List;
@@ -31,12 +32,13 @@ import java.util.List;
 public class AdminRestControllerV1 {
 
     private final UserService userService;
-    private final GoodsService goodsService;
+    private final RestMessageService restMessageService;
 
     @Autowired
-    public AdminRestControllerV1(UserService userService, GoodsService goodsService) {
+    public AdminRestControllerV1(UserService userService
+                                ,RestMessageService restMessageService) {
         this.userService = userService;
-        this.goodsService = goodsService;
+        this.restMessageService = restMessageService;
     }
 
 
@@ -84,27 +86,43 @@ public class AdminRestControllerV1 {
 
     /**
      *
-     * @param userId
+     * @param userName
      * @return
      */
+    @DeleteMapping(value = "/users/delete/{username}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> deleteUser(@PathVariable("username") String userName) {
 
+        if(StringUtils.isEmpty(userName)){
+            RestMessage restMessage = this.restMessageService.findByCode("S001");
+            RestMessageDto restMessageDto = ObjectMapperUtils.map(restMessage, RestMessageDto.class);
 
-    @DeleteMapping(value = "/users/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<User> deleteUser(@PathVariable("id") Long userId) {
-
-        if(userId == null){
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<RestMessageDto>(restMessageDto, HttpStatus.BAD_REQUEST);
         }
 
-        User user = this.userService.findById(userId);
+        User user = this.userService.findByUsername(userName);
 
         if (user == null) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            RestMessage restMessage = this.restMessageService.findByCode("U002");
+            RestMessageDto restMessageDto = ObjectMapperUtils.map(restMessage, RestMessageDto.class);
+
+            return new ResponseEntity<RestMessageDto>(restMessageDto, HttpStatus.NOT_FOUND);
         }
 
-        this.userService.delete(userId);
+        if("admin".equals(user.getUsername())){
+            RestMessage restMessage = this.restMessageService.findByCode("S001");
+            RestMessageDto restMessageDto = ObjectMapperUtils.map(restMessage, RestMessageDto.class);
 
-        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+            return new ResponseEntity<RestMessageDto>(restMessageDto, HttpStatus.BAD_REQUEST);
+        }
+
+        userName = userName;
+
+        this.userService.delete(userName);
+
+        RestMessage restMessage = this.restMessageService.findByCode("U007");
+        RestMessageDto restMessageDto = ObjectMapperUtils.map(restMessage, RestMessageDto.class);
+
+        return new ResponseEntity<RestMessageDto>(restMessageDto, HttpStatus.NO_CONTENT);
     }
 
     /**
@@ -158,49 +176,4 @@ public class AdminRestControllerV1 {
 
         return new ResponseEntity<>(adminUserDto, HttpStatus.OK);
     }
-
-
-    /**
-     *
-     * @param userId
-     * @return
-     */
-
-    @GetMapping(value = "/users/{id}/goods/", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<List<GoodsAdminDto>> getAllGoodsByUserId(@PathVariable("id") Long userId){
-
-        if(userId == null){
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
-
-        User user =  userService.findById(userId);
-
-        if(user == null){
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
-
-        List<Goods> goods = goodsService.findAllByUser(user);
-
-        List<GoodsAdminDto> goodsAdminDtos = ObjectMapperUtils.mapAll(goods, GoodsAdminDto.class);
-
-        return new ResponseEntity<>(goodsAdminDtos, HttpStatus.OK);
-    }
-
-
-
-//    @RequestMapping(value = "/type/{type}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-//    public ResponseEntity<List<UserDto>> getUser(@PathVariable("userStatus") String type){
-//
-//        if(userStatus == null){
-//            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-//        }
-//
-//        List<User> users = this.userService.findByStatus(userStatus);
-//
-//        if(users.isEmpty()){
-//            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-//        }
-//
-//        return new ResponseEntity<>(UserDto.fromUser(users), HttpStatus.OK);
-//    }
 }

@@ -1,0 +1,5 @@
+username,firstName,lastName,email,phone,password,userStatus,rolename,usertype
+contractor1,firstNamecontractor1,lastNamecontractor1,emaicontractor1@mail.ru,79119797601,contractor1,ACTIVE,ROLE_CONTRACTOR
+contractor2,firstName2,lastName2,email2@mail.ru,79229797602,contractor2,ACTIVE,ROLE_CONTRACTOR
+customer3,firstName3,lastName3,email3@mail.ru,79339797603,customer3,ACTIVE,ROLE_CUSTOMER
+customer4,firstName4,lastName4,email4@mail.ru,79449797604,customer4,ACTIVE,ROLE_CUSTOMER

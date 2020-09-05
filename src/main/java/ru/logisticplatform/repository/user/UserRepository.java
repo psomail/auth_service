@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import ru.logisticplatform.model.user.UserStatus;
 import ru.logisticplatform.model.user.User;
 
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -17,6 +18,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     User findByUsername(String name);
 
+    User findByActivationCode(String activationCode);
+
     List<User> findByUserStatus(UserStatus userStatus);
 
+    void deleteByUsername(String username);
+    void deleteByUserStatus(UserStatus userStatus);
+    void deleteAllByUserStatusAndCreatedBefore(UserStatus userStatus, Date createdBefore);
 }

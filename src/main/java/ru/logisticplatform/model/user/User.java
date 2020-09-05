@@ -1,13 +1,8 @@
 package ru.logisticplatform.model.user;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import ru.logisticplatform.model.BaseEntity;
-import ru.logisticplatform.model.goods.Goods;
-import ru.logisticplatform.model.order.Order;
-import ru.logisticplatform.model.transportation.Transportation;
-
 import javax.persistence.*;
 import java.util.List;
 
@@ -45,6 +40,9 @@ public class User extends BaseEntity {
     @Column(name = "password")
     String password;
 
+    @Column(name = "activation_code")
+    String activationCode;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "user_roles",
             joinColumns = {@JoinColumn(name = "user_id", referencedColumnName = "id")},
@@ -55,15 +53,6 @@ public class User extends BaseEntity {
     @Column(name = "status")
     UserStatus userStatus = UserStatus.NOT_ACTIVE;
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    //@JsonIgnore
-    List<Goods> goods;
-
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    List<Order> orders;
-
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    List<Transportation> transportations;
 
     @Override
     public String toString() {

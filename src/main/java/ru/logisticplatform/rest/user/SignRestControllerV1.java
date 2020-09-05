@@ -6,18 +6,25 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.ui.Model;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import ru.logisticplatform.dto.RestMessageDto;
+import ru.logisticplatform.dto.user.ActivatingUserDto;
 import ru.logisticplatform.dto.user.AuthenticationRequestDto;
 import ru.logisticplatform.dto.user.SignUpUserDto;
 import ru.logisticplatform.dto.utils.ObjectMapperUtils;
+import ru.logisticplatform.model.RestMessage;
 import ru.logisticplatform.model.user.User;
+import ru.logisticplatform.model.user.UserStatus;
+import ru.logisticplatform.mq.ProducerRabbitMq;
 import ru.logisticplatform.security.jwt.JwtTokenProvider;
+import ru.logisticplatform.service.RestMessageService;
 import ru.logisticplatform.service.user.RoleService;
 import ru.logisticplatform.service.user.UserService;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -28,51 +35,104 @@ import java.util.Map;
  * @version 1.0
  */
 
-
 @RestController
 @RequestMapping("/api/v1/sign/")
 public class SignRestControllerV1 {
 
+    private final ProducerRabbitMq producerRabbitMq;
+
     private final UserService userService;
     private final RoleService roleService;
+    private final RestMessageService restMessageService;
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
 
     @Autowired
-    public SignRestControllerV1(UserService userService, RoleService roleService, AuthenticationManager authenticationManager,
-                                JwtTokenProvider jwtTokenProvider) {
+    public SignRestControllerV1(UserService userService, RoleService roleService
+                                , AuthenticationManager authenticationManager
+                                , JwtTokenProvider jwtTokenProvider
+                                , ProducerRabbitMq producerRabbitMq
+                                , RestMessageService restMessageService) {
 
         this.userService = userService;
         this.roleService = roleService;
         this.authenticationManager = authenticationManager;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.producerRabbitMq = producerRabbitMq;
+        this.restMessageService = restMessageService;
     }
 
+
+    /**
+     *
+     * @param userDto
+     * @return
+     */
+
     @PostMapping(value = "up", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<SignUpUserDto> saveUser(@RequestBody SignUpUserDto userDto){
+    public ResponseEntity<?> signUpUser(@RequestBody SignUpUserDto userDto){
         HttpHeaders headers = new HttpHeaders();
 
         if (userDto == null) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+            RestMessage restMessage = this.restMessageService.findByCode("S001");
+            RestMessageDto restMessageDto = ObjectMapperUtils.map(restMessage, RestMessageDto.class);
+
+            return new ResponseEntity<RestMessageDto>(restMessageDto, HttpStatus.NOT_FOUND);
         }
 
-        if(this.userService.findByUsername(userDto.getUsername()) != null){
-            return new ResponseEntity<>(HttpStatus.FOUND);
+        User user = this.userService.findByUsername(userDto.getUsername());
+
+        if(user != null) {
+            if (user.getUserStatus() == UserStatus.ACTIVE
+                    || user.getUserStatus() == UserStatus.NOT_ACTIVE) {
+
+                RestMessage restMessage = this.restMessageService.findByCode("U005");
+                RestMessageDto restMessageDto = ObjectMapperUtils.map(restMessage, RestMessageDto.class);
+
+                return new ResponseEntity<RestMessageDto>(restMessageDto, HttpStatus.FOUND);
+            }
+
+            if (user != null && user.getUserStatus() == UserStatus.DELETED) {
+
+                /** TODO Later
+                 *
+                 */
+            }
         }
 
         userDto.getRoles().forEach(role -> role.setId(roleService.findByRoleName(role.getName()).getId()));
+        User userNew = ObjectMapperUtils.map(userDto, User.class);
+        this.userService.signUp(userNew);
 
-        this.userService.signUp(ObjectMapperUtils.map(userDto, User.class));
+        ActivatingUserDto activatingUserDto = ObjectMapperUtils.map(userNew, ActivatingUserDto.class);
 
-        return new ResponseEntity<>(userDto, headers, HttpStatus.CREATED);
+        return new ResponseEntity<>(activatingUserDto, headers, HttpStatus.CREATED);
     }
 
+
+    @GetMapping(value = "/activate/{code}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public void activate(Model model, @PathVariable("code") String code){
+        if(!StringUtils.isEmpty(code)){
+            this.userService.activateUser(code);
+            //return new ResponseEntity<String>("Not found", HttpStatus.NOT_FOUND);
+        }
+
+       // return new ResponseEntity<String>("User successfully activated", HttpStatus.FOUND);
+    }
+
+
+    /**
+     *
+     * @param requestDto
+     * @return
+     */
+
     @PostMapping(value = "in", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity login(@RequestBody AuthenticationRequestDto requestDto) {
+    public ResponseEntity<?> login(@RequestBody AuthenticationRequestDto requestDto) {
+
         try {
             String username = requestDto.getUsername();
-
             String password = requestDto.getPassword();
 
             UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken
@@ -81,8 +141,12 @@ public class SignRestControllerV1 {
             authenticationManager.authenticate(usernamePasswordAuthenticationToken);
             User user = userService.findByUsername(username);
 
-            if (user == null) {
-                throw new UsernameNotFoundException("User with username: " + username + " not found");
+            if (user == null || user.getUserStatus() == UserStatus.DELETED) {
+
+                RestMessage restMessage = this.restMessageService.findByCode("U002");
+                RestMessageDto restMessageDto = ObjectMapperUtils.map(restMessage, RestMessageDto.class);
+
+                return new ResponseEntity<RestMessageDto>(restMessageDto, HttpStatus.NOT_FOUND);
             }
 
             String token = jwtTokenProvider.createToken(username, user.getRoles());
@@ -93,7 +157,11 @@ public class SignRestControllerV1 {
 
             return ResponseEntity.ok(response);
         } catch (AuthenticationException e) {
-            throw new BadCredentialsException("Invalid username or password");
+
+            RestMessage restMessage = this.restMessageService.findByCode("U006");
+            RestMessageDto restMessageDto = ObjectMapperUtils.map(restMessage, RestMessageDto.class);
+            //throw new BadCredentialsException("Invalid username or password");
+            return new ResponseEntity<RestMessageDto>(restMessageDto, HttpStatus.NOT_FOUND);
         }
     }
 
